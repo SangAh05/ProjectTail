@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 
+
 public class PlayerControls : MonoBehaviour
 {
     [SerializeField] CharacterController controller;
@@ -34,7 +35,7 @@ public class PlayerControls : MonoBehaviour
 
         Vector3 forwar = transform.TransformDirection(Vector3.forward);
 
-        float curSpeed = speed * Input.GetAxis("Vertical");  //AD  입력값
+        float curSpeed = playerSpeed * Input.GetAxis("Vertical");  //AD  입력값
         controller.SimpleMove(forwar * curSpeed);
 
         // 점프 
@@ -42,8 +43,8 @@ public class PlayerControls : MonoBehaviour
         {
             isJumping = true;
             // 점프애니메이션 재생
-            activeChar.GetComponent<Animator>().Play("Jump"); // 애니메이션 이름에 따라 바꿔줘야하나??????
-            playerVelocity.y += 10;
+            activeChar.GetComponent<Animator>().Play("JumpFull_Normal_InPlace_SwordAndShield"); // 애니메이션 이름에 따라 바꿔줘야하나??????
+            playerVelocity.y += jumpHeight;
             StartCoroutine(RestJump()); // 리셋 구간 
         }
        

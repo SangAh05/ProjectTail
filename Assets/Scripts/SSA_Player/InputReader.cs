@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 
-namespace Platformer
+namespace ProjectTail
 {
    public class InputReader : ScriptableObject
     {
