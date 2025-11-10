@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using Unity.VisualScripting;
 using UnityEngine;
 
 [RequireComponent (typeof(MeshFilter), typeof(MeshRenderer))]
@@ -76,7 +75,7 @@ public class AbstractMesh : MeshProperty {
 
 	private void UpdateCollider(){
 		Collider _col = GetComponent<Collider> () as Collider;
-		if (_col != null && meshFilter.sharedMesh != null) {
+		if (!_col.IsUnityNull() && !meshFilter.sharedMesh.IsUnityNull()) {
 			if (_col is MeshCollider) {
 				(_col as MeshCollider).sharedMesh = meshFilter.sharedMesh;
 				//(_col as MeshCollider).convex = true;
