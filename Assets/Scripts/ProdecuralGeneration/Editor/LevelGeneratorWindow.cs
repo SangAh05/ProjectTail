@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using System.Linq;
 using System.Xml.Serialization;
 using System.IO;
 using System.Text;
@@ -28,7 +27,6 @@ public class LevelGeneratorWindow : EditorWindow {
 	private bool isExternPreset = false;
 	//GUI Properties
 	private bool showProceduralLevel = true;
-	private XmlSerializer xmlSerializer;
 	private LevelGeneratorPreset preset;
 	private bool showLevelGraph = true;
 	private bool showDebugGUI = false;
@@ -41,6 +39,11 @@ public class LevelGeneratorWindow : EditorWindow {
 	private DebugInfo debugInfo;
 	private DebugData debugData;
 	private DebugGizmo debugGizmo;
+	// Caches to reduce allocations
+	private static readonly XmlSerializer s_xmlSerializer = new XmlSerializer (typeof(LevelGeneratorPreset));
+	private static readonly Encoding s_unicodeEncoding = new UnicodeEncoding ();
+	private readonly List<Constraint> constraintsToDelete = new List<Constraint> (4);
+	private readonly List<string> tagBuffer = new List<string> (16);
 
 	[MenuItem("Window/Level Generator")]
 	public static void ShowWindow(){
@@ -56,7 +59,6 @@ public class LevelGeneratorWindow : EditorWindow {
 		if (debugInfo == null) {
 			debugInfo = new DebugInfo ();
 		}
-		xmlSerializer = new XmlSerializer (typeof(LevelGeneratorPreset));
 	}
 
 	void OnGUI(){
@@ -102,118 +104,28 @@ public class LevelGeneratorWindow : EditorWindow {
 		EditorGUILayout.Space ();
 		showLevelGraph = EditorGUILayout.Foldout (showLevelGraph, "Level Graph Properties");
 		if (showLevelGraph) {
-			EditorGUI.indentLevel += 1;
-			preset.RoomCount = EditorGUILayout.IntField ("Room Count", preset.RoomCount);
-			preset.RoomCount = Mathf.Clamp (preset.RoomCount, 2, 1000);
-			preset.CritPathLength = EditorGUILayout.IntField ("Main Path", preset.CritPathLength);
-			preset.CritPathLength = Mathf.Clamp (preset.CritPathLength, Mathf.Min (2, preset.RoomCount), Mathf.Max (2, preset.RoomCount));
-			preset.MaxDoors = EditorGUILayout.IntField ("Max. Doors", preset.MaxDoors);
-			preset.MaxDoors = Mathf.Clamp (preset.MaxDoors, 3, 10);
-			preset.Distribution = EditorGUILayout.Slider ("Distribution", preset.Distribution, 0.05f, 1f);
-			EditorGUI.indentLevel -= 1;
-			EditorGUILayout.Space ();
+			DrawLevelGraphProperties ();
 		}
 		#endregion
 
 		#region LevelProperties
 		showProceduralLevel = EditorGUILayout.Foldout (showProceduralLevel, "Level Properties");
 		if (showProceduralLevel) {
-			EditorGUI.indentLevel += 1;
-			//preset.DoorSize = EditorGUILayout.IntField ("Global door size", preset.DoorSize);
-			//preset.DoorSize = (int)Mathf.Floor (Mathf.Clamp (preset.DoorSize, 2f, preset.Spacing / 2f));
-			preset.RoomDistance = EditorGUILayout.FloatField ("Global distance", preset.RoomDistance);
-			preset.RoomDistance = Mathf.Clamp (preset.RoomDistance, 0.1f, 10f);
-
-			if (preset.IsSeparateRooms) {
-				preset.Spacing = EditorGUILayout.FloatField ("Minimal margin", preset.Spacing);
-				preset.Spacing = Mathf.Clamp (preset.Spacing, DoorDefinition.GlobalSize * 2f, DoorDefinition.GlobalSize * 4f);
-			}
-			EditorGUI.indentLevel -= 1;
-			EditorGUILayout.Space ();
+			DrawLevelProperties ();
 		}
 		#endregion
 
 		#region HallwayProperties
 		showHallwayGUI = EditorGUILayout.Foldout (showHallwayGUI, "Hallway");
 		if (showHallwayGUI) {
-			EditorGUI.indentLevel += 1;
-			preset.HallwayTiling = EditorGUILayout.FloatField ("Texture tiling:", preset.HallwayTiling);
-			preset.HallwayTiling = Mathf.Clamp (preset.HallwayTiling, 0.01f, 10f);
-			EditorGUILayout.Space ();
-			EditorGUILayout.LabelField ("Materials:");
-			preset.HallwayMaterials [0] = EditorGUILayout.ObjectField ("Ceil", preset.HallwayMaterials [0], typeof(Material), false) as Material;
-			preset.HallwayMaterials [1] = EditorGUILayout.ObjectField ("Floor", preset.HallwayMaterials [1], typeof(Material), false) as Material;
-			preset.HallwayMaterials [2] = EditorGUILayout.ObjectField ("Walls", preset.HallwayMaterials [2], typeof(Material), false) as Material;
-			EditorGUI.indentLevel -= 1;
-			EditorGUILayout.Space ();
+			DrawHallwayProperties ();
 		}
 		#endregion
 
 		#region Constraints
 		showConstraintGUI = EditorGUILayout.Foldout (showConstraintGUI, "Constraints");
 		if (showConstraintGUI) {
-			List<Constraint> constraints = preset.Constraints;
-			List<Constraint> toDelete = new List<Constraint>();
-
-			Separator();
-			EditorGUILayout.Space();
-			for (int i = 0; i < constraints.Count; i++) {
-				Constraint constraint = constraints[i];
-				constraint.Target = (ConstraintTarget)EditorGUILayout.EnumPopup("Target", constraint.Target);
-
-				if(constraint.Target == ConstraintTarget.Hallways){
-					constraint.HallwayAmount = (HallwayAmount)EditorGUILayout.EnumPopup("Amount", constraint.HallwayAmount);
-					if(constraint.HallwayAmount == HallwayAmount.AtMost){
-						DrawAmountValueInput(constraint, false);
-					}
-					if(constraint.HallwayAmount == HallwayAmount.SetPriority){
-						constraint.HallwayPriority = EditorGUILayout.FloatField("Priority", constraint.HallwayPriority);
-						constraint.HallwayPriority = Mathf.Clamp(constraint.HallwayPriority, 0f, 1f);
-						EditorGUILayout.LabelField(" ", "(Value larger than 0.5 cancels out randomness)");
-					}
-					DrawTagSelection(constraint, TagTarget.HALLWAY);
-				} else{
-					constraint.Type = (ConstraintType)EditorGUILayout.EnumPopup("Type", constraint.Type);
-
-					if(constraint.Target == ConstraintTarget.AllRooms ||
-						constraint.Target == ConstraintTarget.MiddleRooms ||
-						constraint.Target == ConstraintTarget.SideRooms){
-						constraint.Amount = (ConstraintAmount)EditorGUILayout.EnumPopup("Rooms", constraint.Amount);
-
-						if(constraint.Amount != ConstraintAmount.All && constraint.Amount != ConstraintAmount.None){
-							DrawAmountValueInput(constraint, true);
-						}
-					}
-
-					if(constraint.Type == ConstraintType.FuzzyProperties){
-						constraint.AutoTagIndex = EditorGUILayout.Popup("Tag", constraint.AutoTagIndex, FuzzyTagDictionary.Descriptors);
-						EditorGUILayout.MinMaxSlider(ref constraint.Min, ref constraint.Max, 0f, 1f);
-						EditorGUILayout.BeginHorizontal();
-						EditorGUILayout.LabelField(FuzzyTagDictionary.FindAttribute(constraint.AutoTagIndex, constraint.Min));
-						EditorGUILayout.LabelField(FuzzyTagDictionary.FindAttribute(constraint.AutoTagIndex, constraint.Max), GUILayout.Width(80));
-						EditorGUILayout.EndHorizontal();
-					} else{
-						DrawTagSelection(constraint, TagTarget.CHUNK);
-					}
-				}
-
-				if (GUILayout.Button ("Remove", EditorStyles.miniButton)) {
-					toDelete.Add(constraints[i]);
-				}
-				//EditorGUILayout.EndHorizontal();
-				EditorGUILayout.Space();
-				Separator();
-				EditorGUILayout.Space();
-			}
-
-			toDelete.ForEach(c => constraints.Remove(c));
-			EditorGUILayout.BeginHorizontal();
-			if (GUILayout.Button ("Add Constraint", EditorStyles.miniButton)) {
-				constraints.Add(new Constraint());
-			}
-			EditorGUILayout.EndHorizontal();
-
-			EditorGUILayout.Space();
+			DrawConstraintsSection ();
 		}
 		#endregion
 
@@ -221,12 +133,7 @@ public class LevelGeneratorWindow : EditorWindow {
 		ManageDebugObject ();
 		showDebugGUI = EditorGUILayout.Foldout (showDebugGUI, "Debug");
 		if (showDebugGUI) {
-			preset.IsSeparateRooms = EditorGUILayout.Toggle ("Separate Rooms", preset.IsSeparateRooms);
-			debugInfo.ShowPaths = EditorGUILayout.Toggle ("Show paths", debugInfo.ShowPaths);
-			debugInfo.ShowConnections = EditorGUILayout.Toggle ("Show connections", debugInfo.ShowConnections);
-			debugInfo.ShowAStarGrid = EditorGUILayout.Toggle ("Path grid", debugInfo.ShowAStarGrid);
-			debugInfo.ShowRoomTypes = EditorGUILayout.Toggle ("Show room types", debugInfo.ShowRoomTypes);
-			debugInfo.SetStatic = EditorGUILayout.Toggle ("Set rooms static", debugInfo.SetStatic);
+			DrawDebugSection ();
 		}
 
 		EditorGUILayout.Space ();
@@ -291,14 +198,16 @@ public class LevelGeneratorWindow : EditorWindow {
 		GUI.SetNextControlName("PlusButton");
 		if (GUILayout.Button ("+", GUILayout.Width(20))) {
 			GUI.FocusControl("PlusButton");
-			List<string> userTags = new List<string>();
+			tagBuffer.Clear();
 			string[] allUserTags = ChunkTags.GlobalUserTags (target);
-			//Filtering all tags that are already used
-			allUserTags.ToList()
-				.Where(s => !constraint.ParsedTags.Contains(s)).ToList()
-				.ForEach(s => userTags.Add(s));
+			for (int i = 0; i < allUserTags.Length; i++){
+				string tag = allUserTags[i];
+				if (!constraint.ParsedTags.Contains(tag)){
+					tagBuffer.Add(tag);
+				}
+			}
 
-			TagContextMenu(userTags, constraint);
+			TagContextMenu(tagBuffer, constraint);
 			//selectedTag = EditorGUILayout.GetControlRect(selectedTag, userTags);
 			//constraint.RawTags += ";" + userTags[selectedTag];
 		}
@@ -381,8 +290,8 @@ public class LevelGeneratorWindow : EditorWindow {
 		if (path.Length != 0) {
 			presetName = Path.GetFileName (path);
 			FileStream fileStream = new FileStream (path, FileMode.Create);
-			using (TextWriter t = new StreamWriter (fileStream, new UnicodeEncoding ())) {
-				xmlSerializer.Serialize (t, preset);
+			using (TextWriter t = new StreamWriter (fileStream, s_unicodeEncoding)) {
+				s_xmlSerializer.Serialize (t, preset);
 			}
 			fileStream.Close ();
 			isExternPreset = true;
@@ -398,7 +307,7 @@ public class LevelGeneratorWindow : EditorWindow {
 				isExternPreset = true;
 				presetName = Path.GetFileName (path);
 				FileStream fileStream = new FileStream (path, FileMode.Open);
-				LevelGeneratorPreset loadedPreset = xmlSerializer.Deserialize (fileStream) as LevelGeneratorPreset;
+				LevelGeneratorPreset loadedPreset = s_xmlSerializer.Deserialize (fileStream) as LevelGeneratorPreset;
 				loadedPreset.LoadMaterials ();
 				fileStream.Close ();
 				if (loadedPreset != null) {
@@ -421,5 +330,119 @@ public class LevelGeneratorWindow : EditorWindow {
 		data.constraint.RawTags += data.constraint.RawTags.Length == 0 ? "" : ";";
 		data.constraint.RawTags += data.Tag;
 		Repaint ();
+	}
+
+	private void DrawLevelGraphProperties (){
+		EditorGUI.indentLevel += 1;
+		preset.RoomCount = EditorGUILayout.IntField ("Room Count", preset.RoomCount);
+		preset.RoomCount = Mathf.Clamp (preset.RoomCount, 2, 1000);
+		preset.CritPathLength = EditorGUILayout.IntField ("Main Path", preset.CritPathLength);
+		preset.CritPathLength = Mathf.Clamp (preset.CritPathLength, Mathf.Min (2, preset.RoomCount), Mathf.Max (2, preset.RoomCount));
+		preset.MaxDoors = EditorGUILayout.IntField ("Max. Doors", preset.MaxDoors);
+		preset.MaxDoors = Mathf.Clamp (preset.MaxDoors, 3, 10);
+		preset.Distribution = EditorGUILayout.Slider ("Distribution", preset.Distribution, 0.05f, 1f);
+		EditorGUI.indentLevel -= 1;
+		EditorGUILayout.Space ();
+	}
+
+	private void DrawLevelProperties (){
+		EditorGUI.indentLevel += 1;
+		preset.RoomDistance = EditorGUILayout.FloatField ("Global distance", preset.RoomDistance);
+		preset.RoomDistance = Mathf.Clamp (preset.RoomDistance, 0.1f, 10f);
+
+		if (preset.IsSeparateRooms) {
+			preset.Spacing = EditorGUILayout.FloatField ("Minimal margin", preset.Spacing);
+			preset.Spacing = Mathf.Clamp (preset.Spacing, DoorDefinition.GlobalSize * 2f, DoorDefinition.GlobalSize * 4f);
+		}
+		EditorGUI.indentLevel -= 1;
+		EditorGUILayout.Space ();
+	}
+
+	private void DrawHallwayProperties (){
+		EditorGUI.indentLevel += 1;
+		preset.HallwayTiling = EditorGUILayout.FloatField ("Texture tiling:", preset.HallwayTiling);
+		preset.HallwayTiling = Mathf.Clamp (preset.HallwayTiling, 0.01f, 10f);
+		EditorGUILayout.Space ();
+		EditorGUILayout.LabelField ("Materials:");
+		preset.HallwayMaterials [0] = EditorGUILayout.ObjectField ("Ceil", preset.HallwayMaterials [0], typeof(Material), false) as Material;
+		preset.HallwayMaterials [1] = EditorGUILayout.ObjectField ("Floor", preset.HallwayMaterials [1], typeof(Material), false) as Material;
+		preset.HallwayMaterials [2] = EditorGUILayout.ObjectField ("Walls", preset.HallwayMaterials [2], typeof(Material), false) as Material;
+		EditorGUI.indentLevel -= 1;
+		EditorGUILayout.Space ();
+	}
+
+	private void DrawConstraintsSection (){
+		List<Constraint> constraints = preset.Constraints;
+		constraintsToDelete.Clear();
+
+		Separator();
+		EditorGUILayout.Space();
+		for (int i = 0; i < constraints.Count; i++) {
+			Constraint constraint = constraints[i];
+			constraint.Target = (ConstraintTarget)EditorGUILayout.EnumPopup("Target", constraint.Target);
+
+			if(constraint.Target == ConstraintTarget.Hallways){
+				constraint.HallwayAmount = (HallwayAmount)EditorGUILayout.EnumPopup("Amount", constraint.HallwayAmount);
+				if(constraint.HallwayAmount == HallwayAmount.AtMost){
+					DrawAmountValueInput(constraint, false);
+				}
+				if(constraint.HallwayAmount == HallwayAmount.SetPriority){
+					constraint.HallwayPriority = EditorGUILayout.FloatField("Priority", constraint.HallwayPriority);
+					constraint.HallwayPriority = Mathf.Clamp(constraint.HallwayPriority, 0f, 1f);
+					EditorGUILayout.LabelField(" ", "(Value larger than 0.5 cancels out randomness)");
+				}
+				DrawTagSelection(constraint, TagTarget.HALLWAY);
+			} else{
+				constraint.Type = (ConstraintType)EditorGUILayout.EnumPopup("Type", constraint.Type);
+
+				if(constraint.Target == ConstraintTarget.AllRooms ||
+					constraint.Target == ConstraintTarget.MiddleRooms ||
+					constraint.Target == ConstraintTarget.SideRooms){
+					constraint.Amount = (ConstraintAmount)EditorGUILayout.EnumPopup("Rooms", constraint.Amount);
+
+					if(constraint.Amount != ConstraintAmount.All && constraint.Amount != ConstraintAmount.None){
+						DrawAmountValueInput(constraint, true);
+					}
+				}
+
+				if(constraint.Type == ConstraintType.FuzzyProperties){
+					constraint.AutoTagIndex = EditorGUILayout.Popup("Tag", constraint.AutoTagIndex, FuzzyTagDictionary.Descriptors);
+					EditorGUILayout.MinMaxSlider(ref constraint.Min, ref constraint.Max, 0f, 1f);
+					EditorGUILayout.BeginHorizontal();
+					EditorGUILayout.LabelField(FuzzyTagDictionary.FindAttribute(constraint.AutoTagIndex, constraint.Min));
+					EditorGUILayout.LabelField(FuzzyTagDictionary.FindAttribute(constraint.AutoTagIndex, constraint.Max), GUILayout.Width(80));
+					EditorGUILayout.EndHorizontal();
+				} else{
+					DrawTagSelection(constraint, TagTarget.CHUNK);
+				}
+			}
+
+			if (GUILayout.Button ("Remove", EditorStyles.miniButton)) {
+				constraintsToDelete.Add(constraints[i]);
+			}
+			EditorGUILayout.Space();
+			Separator();
+			EditorGUILayout.Space();
+		}
+
+		for (int i = 0; i < constraintsToDelete.Count; i++) {
+			constraints.Remove(constraintsToDelete[i]);
+		}
+		EditorGUILayout.BeginHorizontal();
+		if (GUILayout.Button ("Add Constraint", EditorStyles.miniButton)) {
+			constraints.Add(new Constraint());
+		}
+		EditorGUILayout.EndHorizontal();
+
+		EditorGUILayout.Space();
+	}
+
+	private void DrawDebugSection (){
+		preset.IsSeparateRooms = EditorGUILayout.Toggle ("Separate Rooms", preset.IsSeparateRooms);
+		debugInfo.ShowPaths = EditorGUILayout.Toggle ("Show paths", debugInfo.ShowPaths);
+		debugInfo.ShowConnections = EditorGUILayout.Toggle ("Show connections", debugInfo.ShowConnections);
+		debugInfo.ShowAStarGrid = EditorGUILayout.Toggle ("Path grid", debugInfo.ShowAStarGrid);
+		debugInfo.ShowRoomTypes = EditorGUILayout.Toggle ("Show room types", debugInfo.ShowRoomTypes);
+		debugInfo.SetStatic = EditorGUILayout.Toggle ("Set rooms static", debugInfo.SetStatic);
 	}
 }
