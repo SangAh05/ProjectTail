@@ -5,6 +5,7 @@ using UnityEditor;
 using System.Xml.Serialization;
 using System.IO;
 using System.Text;
+using Unity.VisualScripting;
 
 public struct TagMenuData{
 	public Constraint constraint;
@@ -255,8 +256,8 @@ public class LevelGeneratorWindow : EditorWindow {
 
 	private void ClearLevel(){
 		LevelGenerator.ClearLevel ();
-		GameObject _debug = GameObject.FindGameObjectWithTag ("Debug");
-		if (_debug != null) {
+		GameObject _debug = GameObject.FindGameObjectWithTag("Debug");
+		if (!_debug.IsUnityNull()) {
 			DestroyImmediate (_debug);
 		}
 	}
@@ -266,7 +267,7 @@ public class LevelGeneratorWindow : EditorWindow {
 		presetName = GlobalPaths.PresetDefaultName;
 		currentPresetPath = "";
 		
-		if (preset != null) {
+		if (!preset.IsUnityNull()) {
 			preset.Reset ();
 		}
 	}
