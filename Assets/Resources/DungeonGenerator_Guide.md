@@ -464,6 +464,7 @@ private Vector3 ChunkSize(GameObject chunk){
 
 ---
 
-**작성일**: 2024  
+**작성자**: LHcom
+**작성일**: 2025.11.13
 **버전**: 1.0
 
