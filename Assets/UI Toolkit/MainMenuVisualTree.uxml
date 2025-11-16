@@ -1,0 +1,8 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI%20Toolkit/MainMenuStyle.uss?fileID=7433441132597879392&amp;guid=c8841c47e298b1c4cb4a828c69901d21&amp;type=3#MainMenuStyle" />
+    <ui:VisualElement name="Container" style="flex-grow: 1; background-image: url(&quot;project://database/Assets/DK_Assets/Images/bg_test.png?fileID=2800000&amp;guid=c38d31dbee05cdf43a70272c021aeecd&amp;type=3#bg_test&quot;);">
+        <ui:Label text="Main Menu" name="Header" class="header" style="align-self: flex-start;" />
+        <ui:Button text="Start" class="button" />
+        <ui:Button text="Settings" class="button" />
+    </ui:VisualElement>
+</ui:UXML>
