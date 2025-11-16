@@ -1,0 +1,25 @@
+.header {
+    font-size: 150px;
+    color: rgb(255, 255, 255);
+    -unity-font-definition: url("project://database/Assets/DK_Assets/Fonts/Haloberry.otf?fileID=12800000&guid=158bee9b2624dd64eb8b4563e8fa95e0&type=3#Haloberry");
+    -unity-text-align: upper-center;
+    margin-top: 70px;
+    margin-right: 0;
+    margin-left: 20px;
+}
+
+.button {
+    font-size: 40px;
+    width: 220px;
+    height: 100px;
+    align-self: flex-start;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+    border-bottom-left-radius: 10px;
+    background-image: url("project://database/Assets/Pinky%20UI/Buttons/Oval_Rectangle/Button_Oval_Rectangle_Pink.png?fileID=21300000&guid=c7f2493f0628b064aa3d2bd3e460f88e&type=3#Button_Oval_Rectangle_Pink");
+    margin-top: 30px;
+    margin-left: 300px;
+    -unity-font-definition: url("project://database/Assets/DK_Assets/Fonts/This%20Cafe.otf?fileID=12800000&guid=4461629d4b7ab2242831cfb0570c0277&type=3#This Cafe");
+    color: rgb(255, 255, 255);
+}
