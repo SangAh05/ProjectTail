@@ -35,9 +35,12 @@ namespace ProjectTail
         float currentSpeed;
         float velocity;
 
+        // animator parameter 
+        static readonly int speed = Animator.StringToHash("Speed");
+
         void Awake()
         {
-            mainCam = Camera.main.transform;
+            mainCam = Camera.main.transform; 
             freeLookCam.Follow = transform;
             freeLookCam.LookAt = transform;
             freeLookCam.OnTargetObjectWarped(transform, transform.position - freeLookCam.transform.position - Vector3.forward);
@@ -49,6 +52,12 @@ namespace ProjectTail
         void Update()
         {
             HandleMovement();
+            UpdateAnimator();
+        }
+
+        void UpdateAnimator()
+        {
+            animator.SetFloat(speed, currentSpeed);
         }
 
         void HandleMovement()

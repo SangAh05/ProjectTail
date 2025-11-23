@@ -12,6 +12,7 @@ TagManager:
   - ChunkInstance
   - ChunkCopy
   - Chunk
+  - Floor
   layers:
   - Default
   - TransparentFX

@@ -10,18 +10,21 @@ public class CameraManager : MonoBehaviour
     [SerializeField] InputReader input;
     //[SerializeField] CinemachineVirtualCameraBase freeLookCam;
     [SerializeField] CinemachineFreeLook freeLookCam;
+   // [SerializeField] CinemachineFreeLookCamera freeLookCam;
+
     //[SerializeField] CinemachineCamera freeLookCam;
 
     [Header("Settings")]
     [SerializeField, Range(0.5f, 3.0f)] float speedMultiplier = 1f;
 
     bool isRMBPressed;
+    bool isDeviceMouse;
     bool cameraMovementLock;
 
     private void OnEnable()
     {
         input.Look += OnLook;
-        input.EnableMouseControlCamera += OnEnableMouseControlCamera;
+        input.EnableMouseControlCamera  += OnEnableMouseControlCamera;
         input.DisableMouseControlCamera += OnDisableMouseControlCamera;
     }
     void OnDisable()
@@ -33,15 +36,29 @@ public class CameraManager : MonoBehaviour
 
     void OnLook(Vector2 cameraMovement, bool isDeviceMouse)
     {
-        if (cameraMovementLock) return;
+        // 이전 코드 
+        //if (cameraMovementLock) return;
 
-        if (isDeviceMouse && !isRMBPressed) return;
+        //if (isDeviceMouse && !isRMBPressed) return;
 
-        float deviceMultiplier = isDeviceMouse ? Time.fixedDeltaTime : Time.deltaTime;
+        //float deviceMultiplier = isDeviceMouse ? Time.fixedDeltaTime : Time.deltaTime;
 
         //freeLookCam.m_XAxis.m_InputAxisValue = cameraMovement.x * speedMultiplier * deviceMultiplier;
         //freeLookCam.m_XAxis.m_InputAxisValue = cameraMovement.y * speedMultiplier * deviceMultiplier;
 
+        // 수정코드 
+        if (cameraMovementLock) return;
+        if (isDeviceMouse && !isRMBPressed) return;
+
+        float deviceMultiplier = isDeviceMouse ? Time.fixedDeltaTime : Time.deltaTime;
+
+        // X축 (수평 회전)에 X값 할당
+        freeLookCam.m_XAxis.m_InputAxisValue = cameraMovement.x * speedMultiplier * deviceMultiplier;
+
+        // Y축 (수직 궤도 조절)에 Y값 할당
+        freeLookCam.m_YAxis.m_InputAxisValue = cameraMovement.y * speedMultiplier * deviceMultiplier;
+
+        // 안쓰는 코드 
         //freeLookCam.m_XAxis.m_InputAxisValue = value.x * speedMultiplier * deviceMultiplier;
         //freeLookCam.m_YAxis.m_InputAxisValue = value.y * speedMultiplier * deviceMultiplier;
     }
@@ -71,6 +88,4 @@ public class CameraManager : MonoBehaviour
         yield return new WaitForEndOfFrame();
         cameraMovementLock = false;
     }
-
-
 }
